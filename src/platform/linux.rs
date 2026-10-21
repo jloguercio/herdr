@@ -37,7 +37,7 @@ const CHILD_GROUPS_SCAN_LIMIT: usize = 64;
 /// and task/children files for every visited process on a repeated (per-tick/5s)
 /// cadence, so an unbounded walk lets accumulated descendants or unreaped zombies
 /// under the pane shell grow the server's read-syscall rate and CPU without limit
-/// at a constant pane count (see AGENTS.md multiplicative performance paths). The
+/// at a constant pane count. The
 /// foreground-group leader's subtree and the pane shell's descendants advance
 /// round-robin under a shared candidate ceiling, with independent per-root work
 /// budgets, so a pathologically large accumulation on either side cannot starve the

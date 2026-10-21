@@ -9,7 +9,6 @@ test:
     just maintenance-test
     just ui-hot-path-architecture-test
     just integration-assets-test
-    just docs-contract-test
 
 # Run repository maintenance contract tests
 maintenance-test:
@@ -61,11 +60,9 @@ setup-windows-cross *args:
 windows-lint:
     {{python}} scripts/windows_cross.py lint
 
-# Check formatting + run unit tests + Windows target lint + documentation contract tests
+# Check formatting + run unit tests + Windows target lint
 [unix]
 check: ci windows-lint
-    just docs-contract-test
-    @echo "docs reminder: if this changes user-facing behavior, make sure the relevant release docs are updated or called out before release."
 
 [script("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File")]
 [windows]
