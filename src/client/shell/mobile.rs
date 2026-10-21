@@ -112,6 +112,7 @@ fn render_header_status(
             workspace_icon(
                 workspace.asleep,
                 workspace.agent_status,
+                workspace_agent(snapshot, &workspace.workspace_id),
                 config.indicators()
             )
         ),
@@ -844,6 +845,7 @@ fn mobile_items(
                             workspace_icon(
                                 workspace.asleep,
                                 workspace.agent_status,
+                                workspace_agent(snapshot, &workspace.workspace_id),
                                 config.indicators(),
                             ),
                             Style::default().fg(status).bg(background).add_modifier(dim),

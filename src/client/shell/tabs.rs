@@ -24,7 +24,7 @@ pub(crate) fn render_tab_bar(
     let desired_widths = tabs
         .iter()
         .map(|tab| {
-            let label = tab_label(tab, config.indicators());
+            let label = tab_label(tab, tab_icon(snapshot, tab, config.indicators()));
             display_width(&label).saturating_add(4).max(MIN_TAB_WIDTH)
         })
         .collect::<Vec<_>>();
@@ -92,7 +92,8 @@ pub(crate) fn render_tab_bar(
     let mut first_visible = None;
     let mut last_visible = None;
     for (index, tab) in tabs.iter().enumerate().skip(*tab_scroll) {
-        let name = tab_label(tab, config.indicators());
+        let icon = tab_icon(snapshot, tab, config.indicators());
+        let name = tab_label(tab, icon);
         let desired = desired_widths[index];
         let remaining = tab_right.saturating_sub(x);
         let width = desired.min(remaining);
@@ -123,6 +124,11 @@ pub(crate) fn render_tab_bar(
             right_padding = padding.saturating_sub(left) as usize,
         );
         put_text(buffer, rect.x, rect.y, rect.width, &text, style);
+        if icon.is_some() && !tab.focused && left < width {
+            if let Some(cell) = buffer.cell_mut((rect.x + left, rect.y)) {
+                cell.set_fg(tab_icon_color(tab, palette));
+            }
+        }
         hits.tabs.push((rect, tab.tab_id.clone()));
         first_visible.get_or_insert(index);
         last_visible = Some(index);
@@ -371,18 +377,55 @@ fn max_tab_scroll(widths: &[u16], available: u16) -> usize {
     start
 }
 
-fn tab_label(tab: &ClientShellTab, indicators: StatusIndicators) -> String {
-    use crate::api::schema::AgentStatus;
+fn tab_label(tab: &ClientShellTab, icon: Option<&str>) -> String {
     let label = if tab.zoomed {
         format!("{} Z", tab.label)
     } else {
         tab.label.clone()
     };
-    match tab.agent_status {
-        AgentStatus::Working | AgentStatus::Blocked | AgentStatus::Done => {
-            format!("{} {label}", status_icon(tab.agent_status, indicators))
+    match icon {
+        Some(icon) => format!("{icon} {label}"),
+        None => label,
+    }
+}
+
+/// The tab's leading icon: activity in every style. In the `icons` style a tab whose agent
+/// finished a task keeps the check, and an untouched tab shows its agent or a terminal.
+fn tab_icon(
+    snapshot: &ClientShellSnapshot,
+    tab: &ClientShellTab,
+    indicators: StatusIndicators,
+) -> Option<&'static str> {
+    use crate::api::schema::AgentStatus;
+    let asleep = snapshot
+        .workspaces
+        .iter()
+        .any(|workspace| workspace.workspace_id == tab.workspace_id && workspace.asleep);
+    match (indicators.style, tab.agent_status) {
+        (crate::config::StatusIndicatorStyle::Icons, _) if asleep => {
+            Some(workspace_icon(true, tab.agent_status, None, indicators))
         }
-        AgentStatus::Idle | AgentStatus::Unknown => label,
+        (_, AgentStatus::Working | AgentStatus::Blocked | AgentStatus::Done) => {
+            Some(status_icon(tab.agent_status, indicators))
+        }
+        (crate::config::StatusIndicatorStyle::Icons, _) if tab.finished => {
+            Some(status_icon(AgentStatus::Done, indicators))
+        }
+        (crate::config::StatusIndicatorStyle::Icons, _) => Some(activity_icon(
+            tab.agent_status,
+            tab_agent(snapshot, &tab.tab_id),
+            indicators,
+        )),
+        _ => None,
+    }
+}
+
+fn tab_icon_color(tab: &ClientShellTab, palette: &Palette) -> ratatui::style::Color {
+    use crate::api::schema::AgentStatus;
+    match tab.agent_status {
+        AgentStatus::Idle if tab.finished => status_color(AgentStatus::Done, palette),
+        AgentStatus::Idle | AgentStatus::Unknown => palette.overlay1,
+        status => status_color(status, palette),
     }
 }
 

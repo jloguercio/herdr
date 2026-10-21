@@ -180,6 +180,7 @@ pub(super) fn render_collapsed(
                 workspace_icon(
                     workspace.asleep,
                     workspace.agent_status,
+                    workspace_agent(snapshot, &workspace.workspace_id),
                     config.indicators(),
                 ),
                 Style::default()
@@ -476,7 +477,12 @@ pub(super) fn render_expanded(
                     buffer,
                     nested,
                     status,
-                    workspace_icon(workspace.asleep, status, config.indicators()),
+                    workspace_icon(
+                        workspace.asleep,
+                        status,
+                        workspace_agent(snapshot, &workspace.workspace_id),
+                        config.indicators(),
+                    ),
                     entry,
                     tokens,
                     endpoint_active && workspace.focused,

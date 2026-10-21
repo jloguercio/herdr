@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 // ---------------------------------------------------------------------------
 
 /// Current protocol version. Bumped when wire format changes incompatibly.
-pub const PROTOCOL_VERSION: u32 = 23;
+pub const PROTOCOL_VERSION: u32 = 24;
 
 /// Maximum allowed frame payload size (2 MB). Frames larger than this are
 /// rejected to prevent denial-of-service via oversized length prefixes.
@@ -1055,6 +1055,9 @@ pub struct ClientShellTab {
     pub focused: bool,
     #[serde(deserialize_with = "deserialize_client_shell_agent_status")]
     pub agent_status: crate::api::schema::AgentStatus,
+    /// An idle agent in this tab has finished at least one task, even if already seen.
+    #[serde(default)]
+    pub finished: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2844,6 +2847,7 @@ mod tests {
                 zoomed: false,
                 focused: true,
                 agent_status: crate::api::schema::AgentStatus::Idle,
+                finished: false,
             }],
             panes: vec![ClientShellPane {
                 pane_id: "w1:p1".into(),

@@ -175,8 +175,19 @@ fn pane_surface_topology_signature(surface: &PaneSurfaceFrame) -> u64 {
     hash
 }
 
-/// Braille frames for the animated Working indicator.
-const SPINNER_FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+/// Braille frames for the animated Working indicator; dense dots read well at one cell.
+const SPINNER_FRAMES: [&str; 8] = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
+
+/// Nerd Font glyphs used by the `icons` indicator style.
+mod nerd_icons {
+    pub const CLAUDE: &str = "\u{ec82}";
+    pub const OPENAI: &str = "\u{ec81}";
+    pub const AGENT: &str = "\u{ec20}";
+    pub const TERMINAL: &str = "\u{ea85}";
+    pub const DONE: &str = "\u{eab2}";
+    pub const BLOCKED: &str = "\u{eaa2}";
+    pub const SLEEP: &str = "\u{f04b2}";
+}
 
 /// Indicator style plus the current spinner frame, so render stays a pure function of input.
 #[derive(Debug, Clone, Copy)]
@@ -196,26 +207,75 @@ fn status_icon(
             SPINNER_FRAMES[usize::from(indicators.frame) % SPINNER_FRAMES.len()]
         }
         (StatusIndicatorStyle::Dots, AgentStatus::Blocked | AgentStatus::Done) => "●",
-        (StatusIndicatorStyle::Dots, AgentStatus::Idle) => "○",
-        (StatusIndicatorStyle::Dots, AgentStatus::Unknown) => "·",
         (StatusIndicatorStyle::Symbols, AgentStatus::Blocked) => "×",
         (StatusIndicatorStyle::Symbols, AgentStatus::Done) => "✓",
-        (StatusIndicatorStyle::Symbols, AgentStatus::Idle) => "○",
-        (StatusIndicatorStyle::Symbols, AgentStatus::Unknown) => "·",
+        (StatusIndicatorStyle::Icons, AgentStatus::Blocked) => nerd_icons::BLOCKED,
+        (StatusIndicatorStyle::Icons, AgentStatus::Done) => nerd_icons::DONE,
+        (_, AgentStatus::Idle) => "○",
+        (_, AgentStatus::Unknown) => "·",
     }
 }
 
-/// Workspace row icon: a sleeping workspace shows `z` instead of its agent status.
+/// Icon for a pane's agent (or plain terminal) in the `icons` style.
+fn agent_icon(agent: Option<&str>) -> &'static str {
+    match agent {
+        Some("claude") => nerd_icons::CLAUDE,
+        Some("codex") => nerd_icons::OPENAI,
+        Some(_) => nerd_icons::AGENT,
+        None => nerd_icons::TERMINAL,
+    }
+}
+
+/// Icon for a tab or workspace: activity wins; at rest the `icons` style names its agent.
+fn activity_icon(
+    status: crate::api::schema::AgentStatus,
+    agent: Option<&str>,
+    indicators: StatusIndicators,
+) -> &'static str {
+    use crate::api::schema::AgentStatus;
+    match (indicators.style, status) {
+        (crate::config::StatusIndicatorStyle::Icons, AgentStatus::Idle | AgentStatus::Unknown) => {
+            agent_icon(agent)
+        }
+        _ => status_icon(status, indicators),
+    }
+}
+
+/// Workspace row icon: a sleeping workspace shows a sleep mark instead of its status.
 fn workspace_icon(
     asleep: bool,
     status: crate::api::schema::AgentStatus,
+    agent: Option<&str>,
     indicators: StatusIndicators,
 ) -> &'static str {
-    if asleep {
-        "z"
-    } else {
-        status_icon(status, indicators)
+    match (asleep, indicators.style) {
+        (true, crate::config::StatusIndicatorStyle::Icons) => nerd_icons::SLEEP,
+        (true, _) => "z",
+        (false, _) => activity_icon(status, agent, indicators),
     }
+}
+
+/// The agent kind shown for a workspace or tab: its focused agent, else its first one.
+fn located_agent(
+    snapshot: &ClientShellSnapshot,
+    matches: impl Fn(&crate::protocol::ClientShellAgent) -> bool,
+) -> Option<&str> {
+    let mut agents = snapshot.agents.iter().filter(|agent| matches(agent));
+    let first = agents.next()?;
+    std::iter::once(first)
+        .chain(agents)
+        .find(|agent| agent.focused)
+        .unwrap_or(first)
+        .agent
+        .as_deref()
+}
+
+fn workspace_agent<'a>(snapshot: &'a ClientShellSnapshot, workspace_id: &str) -> Option<&'a str> {
+    located_agent(snapshot, |agent| agent.workspace_id == workspace_id)
+}
+
+fn tab_agent<'a>(snapshot: &'a ClientShellSnapshot, tab_id: &str) -> Option<&'a str> {
+    located_agent(snapshot, |agent| agent.tab_id == tab_id)
 }
 
 fn status_dot(status: crate::api::schema::AgentStatus) -> &'static str {

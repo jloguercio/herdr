@@ -185,8 +185,8 @@ fn generated_protocol_schema_artifact_is_current() {
         "{}\n",
         serde_json::to_string_pretty(&protocol_schema_document()).unwrap()
     );
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("schema/herdr-api.schema.json");
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("schema/herdr-api.schema.json");
 
     if std::env::var_os("HERDR_UPDATE_API_SCHEMA").is_some() {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();

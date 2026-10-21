@@ -114,6 +114,8 @@ pub enum StatusIndicatorStyle {
     #[default]
     Dots,
     Symbols,
+    /// Nerd Font glyphs: agent logos at rest, spinner, check, bell and sleep marks.
+    Icons,
 }
 
 impl StatusIndicatorStyle {
@@ -121,6 +123,7 @@ impl StatusIndicatorStyle {
         match self {
             Self::Dots => "dots",
             Self::Symbols => "symbols",
+            Self::Icons => "icons",
         }
     }
 }
@@ -996,7 +999,7 @@ pub struct UiConfig {
     /// Retired setting that Herdr wrote before the workspace filter was removed.
     #[serde(rename = "agent_panel_scope")]
     _legacy_agent_panel_scope: Option<LegacyAgentPanelScopeConfig>,
-    /// Agent status indicator style. Saved values are "dots" or "symbols". Default: "dots".
+    /// Agent status indicator style. Saved values are "dots", "symbols" or "icons". Default: "dots".
     pub status_indicators: StatusIndicatorStyle,
     /// Expanded sidebar row composition.
     pub sidebar: SidebarConfig,

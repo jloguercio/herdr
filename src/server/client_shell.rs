@@ -119,6 +119,15 @@ pub(super) fn snapshot_with_completions(
                 custom_label: !state.is_auto_named(),
                 zoomed: state.zoomed,
                 agent_status: tab.agent_status,
+                finished: state.panes.values().any(|pane| {
+                    app.state
+                        .terminals
+                        .get(&pane.attached_terminal_id)
+                        .is_some_and(|terminal| {
+                            terminal.state == crate::detect::AgentState::Idle
+                                && terminal.last_agent_completion_seq.is_some()
+                        })
+                }),
             }
         })
         .collect();

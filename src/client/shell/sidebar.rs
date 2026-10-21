@@ -98,7 +98,12 @@ pub(crate) fn render_collapsed_sidebar(
             rect.x.saturating_add(2),
             rect.y,
             rect.width.saturating_sub(2),
-            workspace_icon(workspace.asleep, status, config.indicators()),
+            workspace_icon(
+                workspace.asleep,
+                status,
+                workspace_agent(snapshot, &workspace.workspace_id),
+                config.indicators(),
+            ),
             Style::default().fg(status_color(status, palette)),
         );
         hits.workspaces.push(WorkspaceHit {
@@ -325,7 +330,12 @@ pub(crate) fn render_sidebar(
             buffer,
             rect,
             status,
-            workspace_icon(workspace.asleep, status, config.indicators()),
+            workspace_icon(
+                workspace.asleep,
+                status,
+                workspace_agent(snapshot, &workspace.workspace_id),
+                config.indicators(),
+            ),
             entry,
             rows,
             workspace.focused,
