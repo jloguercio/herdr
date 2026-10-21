@@ -7,7 +7,6 @@ use ratatui::{
 };
 
 use super::scrollbar::{render_pane_scrollbar, should_show_scrollbar};
-#[cfg(test)]
 use super::text::display_width;
 use super::text::truncate_end;
 use super::widgets::panel_contrast_fg;
@@ -504,26 +503,76 @@ pub(super) fn render_panes(
                 && app.pane_exposes_host_cursor(ws_idx, info.id);
             rt.render(frame, info.inner_rect, show_cursor);
             render_pane_scrollbar(app, frame, info, rt);
-        } else if let Some(reason) = ws
+        } else if let Some(terminal) = ws
             .tabs
             .get(target.tab_index)
             .and_then(|tab| tab.terminal_id(info.id))
             .and_then(|id| app.terminals.get(id))
-            .and_then(|terminal| match terminal.sleep {
-                crate::terminal::state::TerminalSleep::Asleep => {
-                    Some("Asleep. Right-click the workspace and choose Wake.")
-                }
-                _ => terminal.restore_error.as_deref(),
-            })
         {
-            frame.render_widget(
-                Paragraph::new(reason).wrap(Wrap { trim: false }),
-                info.inner_rect,
-            );
+            if terminal.sleep == crate::terminal::state::TerminalSleep::Asleep {
+                render_asleep_pane(frame.buffer_mut(), info.inner_rect, &app.palette);
+            } else if let Some(reason) = terminal.restore_error.as_deref() {
+                frame.render_widget(
+                    Paragraph::new(reason).wrap(Wrap { trim: false }),
+                    info.inner_rect,
+                );
+            }
         }
     }
 
     render_pane_borders(app, ws, pane_infos, split_borders, frame);
+}
+
+/// Large "Zzz" drawn like the sleep icon: big Z low on the left, smaller ones rising right.
+const ASLEEP_ART: [(&[&str], u16, u16); 3] = [
+    (
+        &["████████", "    ███ ", "  ███   ", "███     ", "████████"],
+        0,
+        5,
+    ),
+    (&["█████", "  ██ ", " ██  ", "█████"], 10, 2),
+    (&["▀▀█", "▄▀ ", "█▄▄"], 17, 0),
+];
+const ASLEEP_ART_SIZE: (u16, u16) = (20, 10);
+const ASLEEP_TITLE: &str = "This workspace is asleep";
+const ASLEEP_HINT: &str = "Right-click it in the sidebar and choose Wake";
+
+/// A sleeping pane: the large Zzz and a short hint, centered; just the text when cramped.
+fn render_asleep_pane(buffer: &mut Buffer, area: Rect, palette: &Palette) {
+    let title_style = Style::default()
+        .fg(palette.text)
+        .add_modifier(Modifier::BOLD);
+    let hint_style = Style::default().fg(palette.overlay0);
+    let (art_width, art_height) = ASLEEP_ART_SIZE;
+    let text_width = display_width(ASLEEP_HINT) as u16;
+    let show_art = area.height >= art_height + 4 && area.width >= art_width.max(text_width);
+    let block_height = if show_art { art_height + 4 } else { 2 };
+    let top = area.y + area.height.saturating_sub(block_height) / 2;
+    let centered_x = |width: u16| area.x + area.width.saturating_sub(width) / 2;
+
+    if show_art {
+        let left = centered_x(art_width);
+        let colors = [palette.accent, palette.mauve, palette.overlay1];
+        for ((lines, dx, dy), color) in ASLEEP_ART.iter().zip(colors) {
+            for (row, line) in lines.iter().enumerate() {
+                buffer.set_string(
+                    left + dx,
+                    top + dy + row as u16,
+                    line,
+                    Style::default().fg(color),
+                );
+            }
+        }
+    }
+    let text_top = if show_art { top + art_height + 2 } else { top };
+    for (offset, (text, style)) in [(ASLEEP_TITLE, title_style), (ASLEEP_HINT, hint_style)]
+        .into_iter()
+        .enumerate()
+    {
+        let width = (display_width(text) as u16).min(area.width);
+        let line = truncate_end(text, usize::from(width));
+        buffer.set_string(centered_x(width), text_top + offset as u16, line, style);
+    }
 }
 
 pub(crate) fn popup_pane_rects(app: &AppState, area: Rect) -> Option<(Rect, Rect)> {
