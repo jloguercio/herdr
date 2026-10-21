@@ -49,6 +49,8 @@ const CLIENT_SHELL_METHODS: &[&str] = &[
     "workspace.move",
     "workspace.move_block",
     "workspace.rename",
+    "workspace.sleep",
+    "workspace.wake",
     "worktree.create",
     "worktree.list",
     "worktree.open",
@@ -296,6 +298,14 @@ mod tests {
         assert_eq!(
             actual.remove("pane.link.resolve").as_deref(),
             Some("f5e4a3e01453ae7b188f127ce951c12c20e0bebcc17cc364eeb6d1a01fd5bf81")
+        );
+        assert_eq!(
+            actual.remove("workspace.sleep").as_deref(),
+            Some("92233221c7fa8858c3a844a0658a859f335f7796a93fdbb1adc7cbe638c6e7d8")
+        );
+        assert_eq!(
+            actual.remove("workspace.wake").as_deref(),
+            Some("cbc43a3422e0f76f9d4fa788967caff5fe84b34783fa99e750751ab34c364680")
         );
 
         assert_eq!(

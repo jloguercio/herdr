@@ -308,6 +308,22 @@ impl App {
         encode_success(id, ResponseResult::Ok {})
     }
 
+    pub(super) fn handle_workspace_sleep(&mut self, id: String, target: WorkspaceTarget) -> String {
+        let Some(index) = self.parse_workspace_id(&target.workspace_id) else {
+            return workspace_not_found(id, &target.workspace_id);
+        };
+        self.sleep_workspace(index);
+        encode_success(id, ResponseResult::Ok {})
+    }
+
+    pub(super) fn handle_workspace_wake(&mut self, id: String, target: WorkspaceTarget) -> String {
+        let Some(index) = self.parse_workspace_id(&target.workspace_id) else {
+            return workspace_not_found(id, &target.workspace_id);
+        };
+        self.wake_workspace(index);
+        encode_success(id, ResponseResult::Ok {})
+    }
+
     pub(super) fn handle_workspace_close(
         &mut self,
         id: String,

@@ -46,6 +46,20 @@ pub(super) fn workspace_close(params: WorkspaceCloseParams) -> std::io::Result<i
     print_method_response("cli:workspace:close", Method::WorkspaceClose(params))
 }
 
+pub(super) fn workspace_sleep(workspace_id: String) -> std::io::Result<i32> {
+    print_method_response(
+        "cli:workspace:sleep",
+        Method::WorkspaceSleep(WorkspaceTarget { workspace_id }),
+    )
+}
+
+pub(super) fn workspace_wake(workspace_id: String) -> std::io::Result<i32> {
+    print_method_response(
+        "cli:workspace:wake",
+        Method::WorkspaceWake(WorkspaceTarget { workspace_id }),
+    )
+}
+
 pub(super) fn tab_list(params: TabListParams) -> std::io::Result<i32> {
     print_method_response("cli:tab:list", Method::TabList(params))
 }

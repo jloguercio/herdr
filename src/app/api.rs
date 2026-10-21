@@ -208,6 +208,13 @@ impl App {
 
         let mut worktree_restore_updates = Vec::new();
         if let AppEvent::PaneDied { pane_id, .. } = &ev {
+            if let Some(remaining) = self.pending_sleep_runtime_exits.get_mut(pane_id) {
+                *remaining -= 1;
+                if *remaining == 0 {
+                    self.pending_sleep_runtime_exits.remove(pane_id);
+                }
+                return Vec::new();
+            }
             if self
                 .state
                 .popup_pane
@@ -475,7 +482,7 @@ impl App {
         }
     }
 
-    fn sync_full_lifecycle_authority_detection_pauses(&self) {
+    pub(crate) fn sync_full_lifecycle_authority_detection_pauses(&self) {
         for workspace in &self.state.workspaces {
             for tab in &workspace.tabs {
                 for pane in tab.panes.values() {
@@ -1081,6 +1088,12 @@ impl App {
             }
             Method::WorkspaceClose(target) => {
                 return self.handle_workspace_close(request.id, target);
+            }
+            Method::WorkspaceSleep(target) => {
+                return self.handle_workspace_sleep(request.id, target);
+            }
+            Method::WorkspaceWake(target) => {
+                return self.handle_workspace_wake(request.id, target);
             }
             Method::WorktreeList(_) | Method::WorktreeOpen(_) => {
                 return responses::encode_error(

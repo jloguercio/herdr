@@ -446,8 +446,31 @@ fn unavailable_restored_terminal(
     reason: String,
 ) -> TerminalState {
     warn!(cwd = %cwd.display(), reason = %reason, "preserving unavailable restored pane");
-    let mut terminal = TerminalState::new(TerminalId::alloc(), cwd);
+    let mut terminal = runtimeless_restored_terminal(pane, cwd);
     terminal.restore_error = Some(reason);
+    terminal
+}
+
+/// A pane that stays stopped until woken, with its saved resume command pending.
+fn sleeping_restored_terminal(pane: &super::snapshot::PaneSnapshot, cwd: PathBuf) -> TerminalState {
+    let mut terminal = runtimeless_restored_terminal(Some(pane), cwd);
+    terminal.sleep = crate::terminal::state::TerminalSleep::Asleep;
+    terminal.pending_agent_resume_plan = saved_reported_resume(pane)
+        .map(|resume| reported_resume_from_snapshot(resume).plan(&terminal.cwd))
+        .or_else(|| {
+            pane.agent_session
+                .as_ref()
+                .and_then(|session| restore_plan_for_snapshot(session, true))
+        });
+    terminal
+}
+
+/// A terminal carrying the pane's saved identity but no running process.
+fn runtimeless_restored_terminal(
+    pane: Option<&super::snapshot::PaneSnapshot>,
+    cwd: PathBuf,
+) -> TerminalState {
+    let mut terminal = TerminalState::new(TerminalId::alloc(), cwd);
     if let Some(pane) = pane {
         terminal.manual_label = pane.label.clone();
         terminal.launch_argv = pane.launch_argv.clone();
@@ -520,6 +543,12 @@ fn restore_tab(
 
         let cwd = saved_cwd;
         let has_import = old_id.is_some_and(|old_id| imported_panes.contains_key(old_id));
+        if let Some(pane) = saved_pane.filter(|pane| pane.asleep && !has_import) {
+            let terminal = sleeping_restored_terminal(pane, cwd);
+            panes.insert(*id, PaneState::new(terminal.id.clone()));
+            terminals.push(terminal);
+            continue;
+        }
         if !has_import && !cwd.is_dir() {
             let terminal = unavailable_restored_terminal(
                 saved_pane,
@@ -1542,6 +1571,7 @@ mod tests {
                     panes: HashMap::from([(
                         0,
                         super::super::snapshot::PaneSnapshot {
+                            asleep: false,
                             cwd,
                             label: Some("reviewer".into()),
                             agent_name: Some("reviewer".into()),
@@ -1629,6 +1659,7 @@ mod tests {
                         (
                             10,
                             super::super::snapshot::PaneSnapshot {
+                                asleep: false,
                                 cwd: cwd.clone(),
                                 label: None,
                                 agent_name: None,
@@ -1641,6 +1672,7 @@ mod tests {
                         (
                             20,
                             super::super::snapshot::PaneSnapshot {
+                                asleep: false,
                                 cwd: cwd.clone(),
                                 label: None,
                                 agent_name: None,
@@ -1695,6 +1727,7 @@ mod tests {
             (
                 id.parse::<u32>().unwrap(),
                 super::super::snapshot::PaneSnapshot {
+                    asleep: false,
                     cwd: cwd.clone(),
                     label: None,
                     agent_name: None,
@@ -1706,6 +1739,7 @@ mod tests {
             )
         };
         let final_pane = super::super::snapshot::PaneSnapshot {
+            asleep: false,
             cwd: cwd.clone(),
             label: Some("planner".into()),
             agent_name: Some("planner".into()),
@@ -1858,6 +1892,7 @@ mod tests {
                     panes: HashMap::from([(
                         0,
                         super::super::snapshot::PaneSnapshot {
+                            asleep: false,
                             cwd,
                             label: None,
                             agent_name: None,
@@ -2169,6 +2204,7 @@ mod tests {
         panes.insert(
             0,
             super::super::snapshot::PaneSnapshot {
+                asleep: false,
                 cwd: cwd.clone(),
                 label: None,
                 agent_name: None,

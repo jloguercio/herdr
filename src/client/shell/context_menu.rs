@@ -5,7 +5,7 @@ impl ClientContextMenuOverlay {
         use ClientContextMenuAction as Action;
 
         let item = |label, action| ClientContextMenuItem { label, action };
-        match &self.target {
+        let mut items = match &self.target {
             ClientContextMenuTarget::Workspace { is_git: false, .. } => {
                 vec![item("Rename", Action::Rename), item("Close", Action::Close)]
             }
@@ -79,7 +79,15 @@ impl ClientContextMenuOverlay {
                 ]);
                 items
             }
+        };
+        if let ClientContextMenuTarget::Workspace { asleep, .. } = &self.target {
+            items.push(if *asleep {
+                item("Wake", Action::Wake)
+            } else {
+                item("Sleep", Action::Sleep)
+            });
         }
+        items
     }
 }
 
@@ -116,6 +124,7 @@ impl ClientShellState {
                 has_worktree_children,
                 close_group,
                 collapsed,
+                asleep: workspace.asleep,
             },
             x,
             y,
@@ -250,6 +259,22 @@ impl ClientShellState {
             }
             ClientContextMenuAction::Close => {
                 self.request_workspace_close(workspace_id, Some(close_group), outcome);
+            }
+            ClientContextMenuAction::Sleep => {
+                self.push_endpoint_method(
+                    crate::api::schema::Method::WorkspaceSleep(
+                        crate::api::schema::WorkspaceTarget { workspace_id },
+                    ),
+                    outcome,
+                );
+            }
+            ClientContextMenuAction::Wake => {
+                self.push_endpoint_method(
+                    crate::api::schema::Method::WorkspaceWake(
+                        crate::api::schema::WorkspaceTarget { workspace_id },
+                    ),
+                    outcome,
+                );
             }
             ClientContextMenuAction::NewWorktree => {
                 self.begin_worktree_action_for(KeybindAction::NewWorktree, workspace_id, outcome)

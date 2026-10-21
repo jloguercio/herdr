@@ -93,6 +93,10 @@ pub enum Method {
     WorkspaceReportMetadata(WorkspaceReportMetadataParams),
     #[serde(rename = "workspace.close")]
     WorkspaceClose(WorkspaceCloseParams),
+    #[serde(rename = "workspace.sleep")]
+    WorkspaceSleep(WorkspaceTarget),
+    #[serde(rename = "workspace.wake")]
+    WorkspaceWake(WorkspaceTarget),
     #[serde(rename = "worktree.list")]
     WorktreeList(WorktreeListParams),
     #[serde(rename = "worktree.create")]

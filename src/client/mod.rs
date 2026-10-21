@@ -2325,6 +2325,7 @@ async fn run_client_loop(
                         outcome.repaint |= notification_repaint
                             | shell.tick_copy_feedback(now)
                             | shell.tick_workspace_highlight(now)
+                            | shell.tick_spinner(now)
                             | shell.tick_endpoint_error(now);
                         let frame = outcome
                             .repaint

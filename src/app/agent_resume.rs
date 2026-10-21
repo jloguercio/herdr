@@ -4,12 +4,14 @@ use bytes::Bytes;
 use ratatui::layout::Rect;
 
 use super::App;
+use crate::terminal::state::TerminalSleep;
 
 struct PendingAgentResumeCandidate {
     pane_id: crate::layout::PaneId,
     terminal_id: crate::terminal::TerminalId,
     cwd: std::path::PathBuf,
-    plan: crate::agent_resume::AgentResumePlan,
+    /// `None` restarts a plain shell, as when waking a pane that had no agent.
+    plan: Option<crate::agent_resume::AgentResumePlan>,
     rows: u16,
     cols: u16,
 }
@@ -19,7 +21,7 @@ impl App {
         self.state
             .terminals
             .values()
-            .any(|terminal| terminal.pending_agent_resume_plan.is_some())
+            .any(|terminal| deferred_start_plan(terminal).is_some())
     }
 
     pub(crate) fn sync_pending_agent_resume_deadline(&mut self, now: Instant) {
@@ -122,7 +124,7 @@ impl App {
                     else {
                         continue;
                     };
-                    let Some(plan) = terminal.pending_agent_resume_plan.clone() else {
+                    let Some(plan) = deferred_start_plan(terminal) else {
                         continue;
                     };
                     pending.push(PendingAgentResumeCandidate {
@@ -197,7 +199,7 @@ impl App {
                     Some((
                         pane_id,
                         terminal.cwd.clone(),
-                        terminal.pending_agent_resume_plan.clone()?,
+                        deferred_start_plan(terminal)?,
                     ))
                 })
             })
@@ -228,7 +230,7 @@ impl App {
         pane_id: crate::layout::PaneId,
         terminal_id: crate::terminal::TerminalId,
         cwd: std::path::PathBuf,
-        plan: crate::agent_resume::AgentResumePlan,
+        plan: Option<crate::agent_resume::AgentResumePlan>,
         rows: u16,
         cols: u16,
         allow_empty_theme: bool,
@@ -238,14 +240,21 @@ impl App {
             return false;
         }
 
-        let Some(resume_command) = shell_command_from_argv(&plan.argv) else {
-            tracing::warn!(
-                pane = pane_id.raw(),
-                terminal = %terminal_id,
-                agent = %plan.agent,
-                "failed to start deferred agent resume with empty argv"
-            );
-            return false;
+        let agent = plan.as_ref().map_or("shell", |plan| plan.agent.as_str());
+        let resume_command = match plan.as_ref() {
+            Some(plan) => {
+                let Some(command) = shell_command_from_argv(&plan.argv) else {
+                    tracing::warn!(
+                        pane = pane_id.raw(),
+                        terminal = %terminal_id,
+                        agent = %plan.agent,
+                        "failed to start deferred agent resume with empty argv"
+                    );
+                    return false;
+                };
+                Some(command)
+            }
+            None => None,
         };
         let Some(launch_env) = self
             .find_pane(pane_id)
@@ -257,6 +266,7 @@ impl App {
         if !cwd.is_dir() {
             if let Some(terminal) = self.state.terminals.get_mut(&terminal_id) {
                 terminal.pending_agent_resume_plan = None;
+                terminal.sleep = TerminalSleep::Awake;
                 terminal.restore_error = Some("Saved directory is unavailable. Restore the directory and restart this session.".into());
                 terminal.revision = terminal.revision.saturating_add(1);
             }
@@ -282,12 +292,13 @@ impl App {
                 tracing::warn!(
                     pane = pane_id.raw(),
                     terminal = %terminal_id,
-                    agent = %plan.agent,
+                    agent = %agent,
                     err = %err,
                     "failed to start shell for deferred agent resume"
                 );
                 if let Some(terminal) = self.state.terminals.get_mut(&terminal_id) {
                     terminal.pending_agent_resume_plan = None;
+                    terminal.sleep = TerminalSleep::Awake;
                     terminal.restore_error = Some(format!("Could not start the saved shell: {err}. Fix the shell configuration and restart this session."));
                     terminal.revision = terminal.revision.saturating_add(1);
                 }
@@ -295,26 +306,42 @@ impl App {
             }
         };
 
-        let mut input = resume_command;
-        input.push('\r');
-        if let Err(err) = runtime.try_send_bytes(Bytes::from(input)) {
-            tracing::warn!(
-                pane = pane_id.raw(),
-                terminal = %terminal_id,
-                agent = %plan.agent,
-                err = %err,
-                "failed to send deferred agent resume command to shell"
-            );
-            runtime.shutdown();
-            return false;
+        if let Some(mut input) = resume_command {
+            input.push('\r');
+            if let Err(err) = runtime.try_send_bytes(Bytes::from(input)) {
+                tracing::warn!(
+                    pane = pane_id.raw(),
+                    terminal = %terminal_id,
+                    agent = %agent,
+                    err = %err,
+                    "failed to send deferred agent resume command to shell"
+                );
+                runtime.shutdown();
+                return false;
+            }
         }
 
         self.terminal_runtimes.insert(terminal_id.clone(), runtime);
         if let Some(terminal) = self.state.terminals.get_mut(&terminal_id) {
             terminal.pending_agent_resume_plan = None;
             terminal.respawn_shell_on_exit = false;
+            terminal.sleep = TerminalSleep::Awake;
+            terminal.revision = terminal.revision.saturating_add(1);
         }
         true
+    }
+}
+
+/// What a runtime-less pane should start with: `Some(Some(plan))` resumes an agent,
+/// `Some(None)` starts a plain shell for a woken pane, `None` means nothing is pending.
+/// Sleeping panes keep their plan but stay stopped until woken.
+fn deferred_start_plan(
+    terminal: &crate::terminal::TerminalState,
+) -> Option<Option<crate::agent_resume::AgentResumePlan>> {
+    match terminal.sleep {
+        TerminalSleep::Asleep => None,
+        TerminalSleep::Waking => Some(terminal.pending_agent_resume_plan.clone()),
+        TerminalSleep::Awake => terminal.pending_agent_resume_plan.clone().map(Some),
     }
 }
 

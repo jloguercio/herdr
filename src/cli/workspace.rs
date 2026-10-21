@@ -18,6 +18,8 @@ pub(super) fn run_workspace_command(args: &[String]) -> std::io::Result<i32> {
         "rename" => workspace_rename(&args[1..]),
         "report-metadata" => workspace_report_metadata(&args[1..]),
         "close" => workspace_close(&args[1..]),
+        "sleep" => workspace_sleep_or_wake("sleep", &args[1..]),
+        "wake" => workspace_sleep_or_wake("wake", &args[1..]),
         "help" | "--help" | "-h" => {
             print_workspace_help();
             Ok(0)
@@ -126,6 +128,19 @@ fn workspace_focus(args: &[String]) -> std::io::Result<i32> {
     }
 
     super::runtime::workspace_focus(super::normalize_workspace_id(raw_workspace_id))
+}
+
+fn workspace_sleep_or_wake(command: &str, args: &[String]) -> std::io::Result<i32> {
+    let [raw_workspace_id] = args else {
+        eprintln!("usage: herdr workspace {command} <workspace_id>");
+        return Ok(2);
+    };
+    let workspace_id = super::normalize_workspace_id(raw_workspace_id);
+    if command == "sleep" {
+        super::runtime::workspace_sleep(workspace_id)
+    } else {
+        super::runtime::workspace_wake(workspace_id)
+    }
 }
 
 fn workspace_rename(args: &[String]) -> std::io::Result<i32> {
@@ -250,4 +265,6 @@ fn print_workspace_help() {
     eprintln!("  herdr workspace rename <workspace_id> <label>");
     eprintln!("  herdr workspace report-metadata <workspace_id> --source ID [--token NAME=VALUE] [--clear-token NAME] [--seq N] [--ttl-ms N]");
     eprintln!("  herdr workspace close <workspace_id> [--group]");
+    eprintln!("  herdr workspace sleep <workspace_id>");
+    eprintln!("  herdr workspace wake <workspace_id>");
 }

@@ -2247,12 +2247,13 @@ fn disconnected_active_endpoint_freezes_surface_and_marks_cached_ui_stale() {
     assert!(state.hits.panes.is_empty());
     assert!(frame.cursor.is_none());
     let buffer = frame.to_ratatui_buffer().expect("frame should reconstruct");
-    let stale_icon = buffer
-        .content()
-        .iter()
-        .find(|cell| cell.symbol() == "×")
-        .expect("stale blocked icon");
-    assert_eq!(stale_icon.fg, state.config.palette.overlay0);
+    assert!(
+        buffer
+            .content()
+            .iter()
+            .any(|cell| cell.symbol() == "×" && cell.fg == state.config.palette.overlay0),
+        "stale blocked icon"
+    );
 }
 
 #[cfg(unix)]

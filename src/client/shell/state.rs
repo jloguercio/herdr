@@ -25,6 +25,8 @@ pub(crate) struct ClientShellConfig {
     pub(super) agents: crate::config::AgentsSidebarConfig,
     pub(super) agent_panel_sort: crate::config::AgentPanelSortConfig,
     pub(super) status_indicators: crate::config::StatusIndicatorStyle,
+    /// Runtime animation frame for the Working spinner; advanced by `tick_spinner`.
+    pub(super) spinner_frame: u8,
     pub(super) sound_enabled: bool,
     pub(super) toast_delivery: crate::config::ToastDelivery,
     pub(super) toast_delay_seconds: u64,
@@ -512,6 +514,8 @@ pub(super) struct ClientWorktreeRemoveOverlay {
 pub(super) enum ClientContextMenuAction {
     Rename,
     Close,
+    Sleep,
+    Wake,
     NewWorktree,
     OpenWorktree,
     RemoveWorktree,
@@ -536,6 +540,7 @@ pub(super) enum ClientContextMenuTarget {
         has_worktree_children: bool,
         close_group: bool,
         collapsed: bool,
+        asleep: bool,
     },
     Tab {
         tab_id: String,
@@ -936,6 +941,7 @@ pub(crate) struct ClientShellState {
     pub(super) pane_scroll_targets: HashMap<String, usize>,
     pub(super) copy_feedback: Option<crate::app::state::CopyFeedback>,
     pub(super) copy_feedback_deadline: Option<std::time::Instant>,
+    pub(super) spinner_deadline: Option<std::time::Instant>,
     pub(super) host_mouse_pixels: Option<crate::input::mouse::HostPixels>,
     pub(super) input_leases: ClientInputLeases,
     pub(super) popup_pending: bool,
@@ -1104,6 +1110,7 @@ impl ClientShellState {
             pane_scroll_targets: HashMap::new(),
             copy_feedback: None,
             copy_feedback_deadline: None,
+            spinner_deadline: None,
             host_mouse_pixels: None,
             input_leases: ClientInputLeases::default(),
             popup_pending: false,
@@ -1860,6 +1867,29 @@ impl ClientShellState {
         self.endpoint_error_deadline = Some(
             std::time::Instant::now() + std::time::Duration::from_secs(ENDPOINT_ERROR_TIMEOUT_SECS),
         );
+    }
+
+    /// Advances the Working spinner about ten times per second while any agent is working.
+    pub(crate) fn tick_spinner(&mut self, now: std::time::Instant) -> bool {
+        const FRAME: std::time::Duration = std::time::Duration::from_millis(100);
+        let working = self.snapshot.as_ref().is_some_and(|snapshot| {
+            let is_working = |status| status == crate::api::schema::AgentStatus::Working;
+            snapshot
+                .agents
+                .iter()
+                .any(|agent| is_working(agent.agent_status))
+                || snapshot.tabs.iter().any(|tab| is_working(tab.agent_status))
+        });
+        if !working {
+            self.spinner_deadline = None;
+            return false;
+        }
+        if self.spinner_deadline.is_some_and(|deadline| now < deadline) {
+            return false;
+        }
+        self.spinner_deadline = Some(now + FRAME);
+        self.config.spinner_frame = self.config.spinner_frame.wrapping_add(1);
+        true
     }
 
     pub(crate) fn tick_endpoint_error(&mut self, now: std::time::Instant) -> bool {

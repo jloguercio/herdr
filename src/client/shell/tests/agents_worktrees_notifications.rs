@@ -116,6 +116,7 @@ fn grouped_worktrees_render_parent_branch_and_indented_child() {
         }),
         focused: false,
         agent_status: AgentStatus::Idle,
+        asleep: false,
     });
     state.set_snapshot(Box::new(snapshot));
     state.set_pane_surface(surface());

@@ -162,6 +162,18 @@ pub struct TerminalState {
     agent_process_acquisition_pending: bool,
     pub pending_agent_resume_plan: Option<crate::agent_resume::AgentResumePlan>,
     pub restore_error: Option<String>,
+    pub sleep: TerminalSleep,
+}
+
+/// Whether a pane's process was stopped by a workspace sleep.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TerminalSleep {
+    #[default]
+    Awake,
+    /// No runtime; the pane keeps its layout and resume plan until woken.
+    Asleep,
+    /// Woken but not yet respawned; the deferred start path picks it up.
+    Waking,
 }
 
 impl TerminalState {
@@ -202,6 +214,7 @@ impl TerminalState {
             agent_process_acquisition_pending: false,
             pending_agent_resume_plan: None,
             restore_error: None,
+            sleep: TerminalSleep::Awake,
         }
     }
 

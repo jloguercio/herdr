@@ -110,6 +110,13 @@ impl ClientShellState {
 }
 
 impl ClientShellConfig {
+    pub(super) fn indicators(&self) -> super::StatusIndicators {
+        super::StatusIndicators {
+            style: self.status_indicators,
+            frame: self.spinner_frame,
+        }
+    }
+
     pub(crate) fn from_config(config: &Config) -> Self {
         let theme_runtime = crate::app::client_theme_runtime_from_config(config);
         Self {
@@ -125,6 +132,7 @@ impl ClientShellConfig {
             agents: config.ui.sidebar.agents.clone(),
             agent_panel_sort: config.ui.agent_panel_sort,
             status_indicators: config.ui.status_indicators,
+            spinner_frame: 0,
             sound_enabled: config.ui.sound.enabled,
             toast_delivery: config.ui.toast.delivery,
             toast_delay_seconds: config.ui.toast.delay_seconds,

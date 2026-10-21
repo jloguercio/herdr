@@ -175,29 +175,57 @@ fn pane_surface_topology_signature(surface: &PaneSurfaceFrame) -> u64 {
     hash
 }
 
+/// Braille frames for the animated Working indicator.
+const SPINNER_FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// Indicator style plus the current spinner frame, so render stays a pure function of input.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct StatusIndicators {
+    pub style: crate::config::StatusIndicatorStyle,
+    pub frame: u8,
+}
+
 fn status_icon(
     status: crate::api::schema::AgentStatus,
-    style: crate::config::StatusIndicatorStyle,
+    indicators: StatusIndicators,
 ) -> &'static str {
     use crate::api::schema::AgentStatus;
     use crate::config::StatusIndicatorStyle;
-    match (style, status) {
-        (
-            StatusIndicatorStyle::Dots,
-            AgentStatus::Working | AgentStatus::Blocked | AgentStatus::Done,
-        ) => "●",
+    match (indicators.style, status) {
+        (_, AgentStatus::Working) => {
+            SPINNER_FRAMES[usize::from(indicators.frame) % SPINNER_FRAMES.len()]
+        }
+        (StatusIndicatorStyle::Dots, AgentStatus::Blocked | AgentStatus::Done) => "●",
         (StatusIndicatorStyle::Dots, AgentStatus::Idle) => "○",
         (StatusIndicatorStyle::Dots, AgentStatus::Unknown) => "·",
         (StatusIndicatorStyle::Symbols, AgentStatus::Blocked) => "×",
-        (StatusIndicatorStyle::Symbols, AgentStatus::Working) => "◐",
         (StatusIndicatorStyle::Symbols, AgentStatus::Done) => "✓",
         (StatusIndicatorStyle::Symbols, AgentStatus::Idle) => "○",
         (StatusIndicatorStyle::Symbols, AgentStatus::Unknown) => "·",
     }
 }
 
+/// Workspace row icon: a sleeping workspace shows `z` instead of its agent status.
+fn workspace_icon(
+    asleep: bool,
+    status: crate::api::schema::AgentStatus,
+    indicators: StatusIndicators,
+) -> &'static str {
+    if asleep {
+        "z"
+    } else {
+        status_icon(status, indicators)
+    }
+}
+
 fn status_dot(status: crate::api::schema::AgentStatus) -> &'static str {
-    status_icon(status, crate::config::StatusIndicatorStyle::Dots)
+    status_icon(
+        status,
+        StatusIndicators {
+            style: crate::config::StatusIndicatorStyle::Dots,
+            frame: 0,
+        },
+    )
 }
 
 fn status_priority(status: crate::api::schema::AgentStatus) -> u8 {

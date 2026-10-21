@@ -111,6 +111,9 @@ pub struct PaneSnapshot {
     pub agent_resume: Option<PaneAgentResumeSnapshot>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub launch_argv: Option<Vec<String>>,
+    /// Stopped by a workspace sleep; restore keeps it stopped until woken.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub asleep: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -371,13 +374,27 @@ fn capture_tab(
                     value: session.session_ref.value.clone(),
                 })
         });
-        let agent_resume = terminal
-            .and_then(|terminal| terminal.reported_resume())
-            .map(|resume| PaneAgentResumeSnapshot {
-                source: resume.source.clone(),
-                agent: resume.agent.clone(),
-                argv: resume.argv.clone(),
+        let asleep = terminal.is_some_and(|terminal| {
+            terminal.sleep == crate::terminal::state::TerminalSleep::Asleep
+        });
+        // A sleeping pane already resolved its resume command; keep exactly that one.
+        let sleep_resume = terminal
+            .filter(|_| asleep)
+            .and_then(|terminal| terminal.pending_agent_resume_plan.as_ref())
+            .map(|plan| PaneAgentResumeSnapshot {
+                source: "herdr:sleep".into(),
+                agent: plan.agent.clone(),
+                argv: plan.argv.clone(),
             });
+        let agent_resume = sleep_resume.or_else(|| {
+            terminal
+                .and_then(|terminal| terminal.reported_resume())
+                .map(|resume| PaneAgentResumeSnapshot {
+                    source: resume.source.clone(),
+                    agent: resume.agent.clone(),
+                    argv: resume.argv.clone(),
+                })
+        });
         panes.insert(
             id.raw(),
             PaneSnapshot {
@@ -388,6 +405,7 @@ fn capture_tab(
                 agent_session,
                 agent_resume,
                 launch_argv,
+                asleep,
             },
         );
     }
@@ -700,6 +718,7 @@ mod tests {
         panes.insert(
             0,
             PaneSnapshot {
+                asleep: false,
                 cwd: PathBuf::from("/home/can/Projects/herdr"),
                 label: None,
                 agent_name: None,
@@ -712,6 +731,7 @@ mod tests {
         panes.insert(
             1,
             PaneSnapshot {
+                asleep: false,
                 cwd: PathBuf::from("/home/can/Projects/website"),
                 label: Some("website".into()),
                 agent_name: None,
@@ -1398,6 +1418,7 @@ mod tests {
         panes.insert(
             0,
             PaneSnapshot {
+                asleep: false,
                 cwd: PathBuf::from("/tmp/this-directory-does-not-exist-for-herdr-test"),
                 label: None,
                 agent_name: None,
@@ -1410,6 +1431,7 @@ mod tests {
         panes.insert(
             1,
             PaneSnapshot {
+                asleep: false,
                 cwd: std::env::var("HOME")
                     .map(PathBuf::from)
                     .unwrap_or_else(|_| PathBuf::from("/tmp")),
