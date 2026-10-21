@@ -230,8 +230,21 @@ pub(crate) fn render_sidebar(
             .fg(palette.overlay0)
             .add_modifier(Modifier::BOLD),
     );
+    hits.workspace_filter_toggle = render_workspace_filter_toggle(
+        buffer,
+        workspace_area,
+        snapshot,
+        state.workspace_filter,
+        palette,
+    );
 
-    let entries = workspace_entries(snapshot, state.collapsed_groups);
+    let mut entries = workspace_entries(snapshot, state.collapsed_groups);
+    entries.retain(|entry| {
+        snapshot
+            .workspaces
+            .get(entry.index)
+            .is_some_and(|workspace| state.workspace_filter.matches(workspace))
+    });
     let body = Rect::new(
         workspace_area.x,
         workspace_area.y.saturating_add(WORKSPACE_HEADER_ROWS),
@@ -463,6 +476,38 @@ pub(crate) fn render_sidebar(
         "«",
         Style::default().fg(palette.overlay0),
     );
+}
+
+/// The all/awake/asleep switch in the spaces header; shown once something sleeps.
+fn render_workspace_filter_toggle(
+    buffer: &mut Buffer,
+    area: Rect,
+    snapshot: &ClientShellSnapshot,
+    filter: WorkspaceFilter,
+    palette: &Palette,
+) -> Rect {
+    let any_asleep = snapshot.workspaces.iter().any(|workspace| workspace.asleep);
+    if area.is_empty() || (filter == WorkspaceFilter::All && !any_asleep) {
+        return Rect::default();
+    }
+    let label = filter.label();
+    let width = display_width(label).min(area.width);
+    let rect = Rect::new(area.right().saturating_sub(width), area.y, width, 1);
+    put_text(
+        buffer,
+        rect.x,
+        rect.y,
+        rect.width,
+        label,
+        Style::default()
+            .fg(if filter == WorkspaceFilter::All {
+                palette.overlay0
+            } else {
+                palette.accent
+            })
+            .add_modifier(Modifier::BOLD),
+    );
+    rect
 }
 
 pub(crate) fn workspace_entries(

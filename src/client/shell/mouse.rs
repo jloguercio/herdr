@@ -2022,6 +2022,12 @@ impl ClientShellState {
                     }
                     return;
                 }
+                if super::contains(self.hits.workspace_filter_toggle, point) {
+                    self.workspace_filter = self.workspace_filter.next();
+                    self.workspace_scroll = 0;
+                    outcome.repaint = true;
+                    return;
+                }
                 if super::contains(self.hits.agent_sort_toggle, point) {
                     let sort = match self.config.agent_panel_sort {
                         crate::config::AgentPanelSortConfig::Spaces => {
