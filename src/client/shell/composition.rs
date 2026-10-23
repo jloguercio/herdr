@@ -237,6 +237,16 @@ impl ClientShellState {
                 workspace_filter: self.workspace_filter,
             },
         );
+        super::usage::render_usage_bar(
+            &mut buffer,
+            layout.usage_bar,
+            self.usage
+                .as_ref()
+                .and_then(super::usage::UsageMonitor::snapshot)
+                .as_ref(),
+            &self.config.palette,
+            self.config.status_indicators == crate::config::StatusIndicatorStyle::Icons,
+        );
         self.hits.panes = surface
             .panes
             .iter()

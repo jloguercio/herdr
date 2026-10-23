@@ -25,6 +25,7 @@ pub(crate) struct ClientShellConfig {
     pub(super) agents: crate::config::AgentsSidebarConfig,
     pub(super) agent_panel_sort: crate::config::AgentPanelSortConfig,
     pub(super) status_indicators: crate::config::StatusIndicatorStyle,
+    pub(super) usage_bar: bool,
     /// Runtime animation frame for the Working spinner; advanced by `tick_spinner`.
     pub(super) spinner_frame: u8,
     pub(super) sound_enabled: bool,
@@ -61,6 +62,8 @@ pub(super) struct ClientShellLayout {
     pub tab_bar: Rect,
     pub mobile_header: Rect,
     pub pane_surface: Rect,
+    /// Plan-limits row across the whole bottom edge; empty when `ui.usage_bar` is off.
+    pub usage_bar: Rect,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -979,6 +982,10 @@ pub(crate) struct ClientShellState {
     pub(super) copy_feedback: Option<crate::app::state::CopyFeedback>,
     pub(super) copy_feedback_deadline: Option<std::time::Instant>,
     pub(super) spinner_deadline: Option<std::time::Instant>,
+    /// Started on the first tick with `ui.usage_bar` on.
+    pub(super) usage: Option<super::usage::UsageMonitor>,
+    /// Usage generation and minute last painted; either changing repaints the bar.
+    pub(super) usage_painted: (u64, u64),
     pub(super) host_mouse_pixels: Option<crate::input::mouse::HostPixels>,
     pub(super) input_leases: ClientInputLeases,
     pub(super) popup_pending: bool,
@@ -1149,6 +1156,8 @@ impl ClientShellState {
             copy_feedback: None,
             copy_feedback_deadline: None,
             spinner_deadline: None,
+            usage: None,
+            usage_painted: (0, 0),
             host_mouse_pixels: None,
             input_leases: ClientInputLeases::default(),
             popup_pending: false,
@@ -1905,6 +1914,23 @@ impl ClientShellState {
         self.endpoint_error_deadline = Some(
             std::time::Instant::now() + std::time::Duration::from_secs(ENDPOINT_ERROR_TIMEOUT_SECS),
         );
+    }
+
+    /// Repaints the usage bar when new limits arrive or its countdowns cross a minute.
+    pub(crate) fn tick_usage(&mut self) -> bool {
+        if !self.config.usage_bar {
+            return false;
+        }
+        let monitor = self
+            .usage
+            .get_or_insert_with(super::usage::UsageMonitor::start);
+        let minute = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs() / 60);
+        let painted = (monitor.generation(), minute);
+        let changed = painted != self.usage_painted;
+        self.usage_painted = painted;
+        changed
     }
 
     /// Advances the Working spinner about ten times per second while any agent is working.

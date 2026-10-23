@@ -132,6 +132,7 @@ impl ClientShellConfig {
             agents: config.ui.sidebar.agents.clone(),
             agent_panel_sort: config.ui.agent_panel_sort,
             status_indicators: config.ui.status_indicators,
+            usage_bar: config.ui.usage_bar,
             spinner_frame: 0,
             sound_enabled: config.ui.sound.enabled,
             toast_delivery: config.ui.toast.delivery,
@@ -360,6 +361,7 @@ impl ClientShellConfig {
                 self.agents = ui.sidebar.agents.clone();
                 self.agent_panel_sort = ui.agent_panel_sort;
                 self.status_indicators = ui.status_indicators;
+                self.usage_bar = ui.usage_bar;
                 self.sound_enabled = ui.sound.enabled;
                 self.toast_delivery = ui.toast.delivery;
                 self.toast_delay_seconds = ui.toast.delay_seconds;
@@ -405,8 +407,13 @@ impl ClientShellConfig {
                 tab_bar: Rect::default(),
                 mobile_header: Rect::new(0, 0, cols, header_height),
                 pane_surface: Rect::new(0, header_height, cols, rows.saturating_sub(header_height)),
+                usage_bar: Rect::default(),
             };
         }
+
+        let usage_height = u16::from(self.usage_bar && rows > 4);
+        let usage_bar = Rect::new(0, rows - usage_height, cols, usage_height);
+        let rows = rows - usage_height;
 
         let sidebar_width = if sidebar_collapsed {
             match self.sidebar_collapsed_mode {
@@ -451,6 +458,7 @@ impl ClientShellConfig {
             tab_bar,
             mobile_header: Rect::default(),
             pane_surface,
+            usage_bar,
         }
     }
 
