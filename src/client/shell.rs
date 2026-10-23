@@ -188,6 +188,7 @@ mod nerd_icons {
     pub const DONE: &str = "\u{eab2}";
     pub const BLOCKED: &str = "\u{eaa2}";
     pub const SLEEP: &str = "\u{f04b2}";
+    pub const RESET: &str = "\u{f017}";
 }
 
 /// Indicator style plus the current spinner frame, so render stays a pure function of input.

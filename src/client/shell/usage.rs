@@ -387,7 +387,8 @@ fn until(resets_at: i64, now: i64) -> String {
     }
 }
 
-/// One row across the whole app: `<icon> Claude  5h 42% ↻1h20m  week 18% ↻3d4h   <icon> Codex …`.
+/// One row across the whole app, centered:
+/// `<icon> Claude  5h 42% <clock> 1h20m  week 18% <clock> 3d4h   <icon> Codex …`.
 pub(super) fn render_usage_bar(
     buffer: &mut Buffer,
     area: Rect,
@@ -400,43 +401,52 @@ pub(super) fn render_usage_bar(
     }
     let base = Style::default().fg(palette.text).bg(palette.panel_bg);
     buffer.set_style(area, base);
-    let (y, right) = (area.y, area.right());
-    let mut x = area.x.saturating_add(1);
+    let segments = usage_segments(snapshot, palette, icons, unix_now());
+    let width: u16 = segments.iter().map(|(text, _)| display_width(text)).sum();
+    let mut x = area.x + area.width.saturating_sub(width) / 2;
+    for (text, style) in &segments {
+        x = put_segment(buffer, x, area.y, area.right(), text, *style);
+    }
+}
+
+fn usage_segments(
+    snapshot: Option<&UsageSnapshot>,
+    palette: &Palette,
+    icons: bool,
+    now: i64,
+) -> Vec<(String, Style)> {
+    let base = Style::default().fg(palette.text).bg(palette.panel_bg);
     let dim = base.fg(palette.overlay0);
     let Some(snapshot) = snapshot else {
-        put_segment(buffer, x, y, right, "loading usage…", dim);
-        return;
+        return vec![("loading usage…".into(), dim)];
     };
-    let now = unix_now();
+    // `↻` is drawn two cells wide by many fonts and overlaps the countdown: use a one-cell glyph
+    let reset = if icons {
+        format!("{} ", super::nerd_icons::RESET)
+    } else {
+        "resets ".into()
+    };
     let providers = [
         (super::nerd_icons::CLAUDE, "Claude", &snapshot.claude),
         (super::nerd_icons::OPENAI, "Codex", &snapshot.codex),
     ];
-    let mut first = true;
+    let mut segments = Vec::new();
     for (icon, name, usage) in providers {
         let Some(usage) = usage else {
             continue;
         };
-        if !first {
-            x = put_segment(buffer, x, y, right, "   ", base);
+        if !segments.is_empty() {
+            segments.push(("     ".into(), base));
         }
-        first = false;
         let label = if icons {
-            format!("{icon} {name} ")
+            format!("{icon} {name}")
         } else {
-            format!("{name} ")
+            name.to_owned()
         };
-        x = put_segment(
-            buffer,
-            x,
-            y,
-            right,
-            &label,
-            base.fg(palette.accent).add_modifier(Modifier::BOLD),
-        );
+        segments.push((label, base.fg(palette.accent).add_modifier(Modifier::BOLD)));
         match usage {
             ProviderUsage::Error(message) => {
-                x = put_segment(buffer, x, y, right, message, base.fg(palette.red));
+                segments.push((format!("  {message}"), base.fg(palette.red)));
             }
             ProviderUsage::Windows(windows) => {
                 for window in windows {
@@ -448,28 +458,19 @@ pub(super) fn render_usage_bar(
                     } else {
                         palette.green
                     };
-                    x = put_segment(buffer, x, y, right, &format!(" {} ", window.label), dim);
-                    x = put_segment(buffer, x, y, right, &format!("{pct:.0}%"), base.fg(colour));
+                    segments.push((format!("  {} ", window.label), dim));
+                    segments.push((format!("{pct:.0}%"), base.fg(colour)));
                     if let Some(resets_at) = window.resets_at {
-                        x = put_segment(
-                            buffer,
-                            x,
-                            y,
-                            right,
-                            &format!(" ↻{}", until(resets_at, now)),
-                            dim,
-                        );
+                        segments.push((format!(" {reset}{}", until(resets_at, now)), dim));
                     }
                 }
             }
         }
     }
-    if first {
-        let text = "no Claude Code or Codex session";
-        if display_width(text) < area.width {
-            put_segment(buffer, x, y, right, text, dim);
-        }
+    if segments.is_empty() {
+        segments.push(("no Claude Code or Codex session".into(), dim));
     }
+    segments
 }
 
 #[cfg(test)]
